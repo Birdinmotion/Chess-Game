@@ -1,0 +1,343 @@
+#Class Project pygame chess
+#members: Jonathan Morley, , ,
+#Version 1.1 "en passant update"
+#11/21/23 not done at 2:17 A.M.
+#
+
+import pygame
+#import random
+import sys
+#from itertools import combinations
+import os
+
+# current directory
+dirname = os.path.dirname(__file__)
+
+ORANGE = (255,185,15)
+BLUE = (76, 252, 241)
+WHITE = (255,255,255)
+BLACK = (199,199,199)
+WIDTH = 800
+ROWS = 8
+
+
+#pieces are global variables, able to be called by all subsequent classes, functions, and methods.
+#IMPORTANT TO NOT NAME LOCAL VARIABLES AS GLOBAL OR TRY TO GIVE T
+BKING = pygame.image.load(os.path.join(dirname, 'Pieces/bK.png'))
+BBISHOP= pygame.image.load(os.path.join(dirname, 'Pieces/bB.png'))
+BKNIGHT= pygame.image.load(os.path.join(dirname, 'Pieces/bN.png'))
+BPAWN= pygame.image.load(os.path.join(dirname, 'Pieces/bP.png'))
+BQUEEN= pygame.image.load(os.path.join(dirname, 'Pieces/bQ.png'))
+BROOK= pygame.image.load(os.path.join(dirname, 'Pieces/bR.png'))
+
+WKING= pygame.image.load(os.path.join(dirname, 'Pieces/wK.png'))
+WBISHOP= pygame.image.load(os.path.join(dirname, 'Pieces/wB.png'))
+WKNIGHT= pygame.image.load(os.path.join(dirname, 'Pieces/wN.png'))
+WPAWN= pygame.image.load(os.path.join(dirname, 'Pieces/wP.png'))
+WQUEEN= pygame.image.load(os.path.join(dirname, 'Pieces/wQ.png'))
+WROOK= pygame.image.load(os.path.join(dirname, 'Pieces/wR.png'))
+
+pygame.init()
+WIN = pygame.display.set_mode((WIDTH,WIDTH))
+pygame.display.set_caption('Chess')
+
+priorMoves=[]
+class Node:
+    def __init__(self, row, col, width):
+        # The constructor for the Node class
+        # initializes a Node with the specified row, column, and width.
+        self.row = row
+        self.col = col
+        # Calculate the x and y coordinates for the Node.
+        # The x coordinate is multiplying the row index by the width of each cell.
+        # The y coordinate is multiplying the column index by the width of each cell.
+        self.x = int(row * width)
+        self.y = int(col * width)
+        self.colour = WHITE  # Set the default colour of the Node to white.
+        self.piece = None    # Initialize the piece attribute to None. This can later be set to a chess piece.
+
+    def draw(self, WIN):
+        # The draw method is responsible for drawing the Node on the screen.
+        # It takes a Pygame window (WIN) as an argument.
+         # Draw a rectangle on the WIN to represent the Node.
+        # The rectangle's position and size are based on the Node's x, y coordinates and the width of each cell.
+        pygame.draw.rect(WIN, self.colour, (self.x, self.y, WIDTH / ROWS, WIDTH / ROWS))
+        # If the Node has a chess piece, draw the piece's image at the Node's position.
+        if self.piece:
+            WIN.blit(self.piece.image, (self.x, self.y))
+
+class Piece:
+    def __init__(self, team, piece_type,images):
+        #assigns team
+        self.team=team
+        #default color is white, if statement sets opposite team to black
+        self.image = images if self.team == 'B' else images
+        #assigns attribute of the piece type, pawn, rook, king, etc
+        self.type = piece_type
+
+    def draw(self, x, y):
+        WIN.blit(self.image, (x,y))
+
+class LastMove:
+    def __init__(self, piece, start_pos, end_pos, move_type=None):
+        self.piece = piece        # The piece that was moved
+        self.start_pos = start_pos # The starting position of the move (tuple: (col, row))
+        self.end_pos = end_pos     # The ending position of the move (tuple: (col, row))
+        self.move_type = move_type # Type of move (e.g., "en_passant", "castle", "two_step_pawn", etc.)
+def make_grid(rows, width):
+    #initialize grid array
+    grid = []
+    #The double slash // in Python is used for floor division.
+    #It divides the left-hand operand by the right-hand operand and rounds the result down to the nearest whole number.
+    #interesting, must remember for later
+    gap = width // rows
+
+    # Iterate over each row.
+    for i in range(rows):
+        # Add an empty list to represent a new row in the grid.
+        grid.append([])
+        # Iterate over each column in the current row.
+        for j in range(rows):
+            # Create a new Node object for each cell in the grid.
+            node = Node(j,i, gap)
+            # Set the node color to black on alternating cells.
+            if abs(i-j) % 2 == 0:
+                node.colour=BLACK
+            # Initialize pawns on the 2nd and 7th rows.
+            if i == 1:
+                node.piece = Piece('W','PAWN',WPAWN)
+            if i == 6:
+                node.piece = Piece('B','PAWN',BPAWN)
+
+            #  Place rooks in the corners of the board.
+            if i == 0 and j == 0 or j == 7 and i == 0:
+                node.piece = Piece('W','ROOK', WROOK)
+            if i == 7 and j == 0 or i == 7 and j == 7:
+                node.piece = Piece('B','ROOK', BROOK)
+
+            # Initialize knights next to the rooks.
+            if i == 0 and j == 1 or j == 6 and i == 0:
+                node.piece = Piece('W','KNIGHT', WKNIGHT)
+            if i == 7 and j == 1 or i == 7 and j == 6:
+                node.piece = Piece('B','KNIGHT', BKNIGHT)
+
+            # Place bishops next to the knights.
+            if i == 0 and j == 2 or j == 5 and i == 0:
+                node.piece = Piece('W','BISHOP', WBISHOP)
+            if i == 7 and j == 2 or i == 7 and j == 5:
+                node.piece = Piece('B','BISHOP', BBISHOP)
+
+            #  Set the king and queen in the middle of the first and last rows.
+            if i == 0 and j == 4:
+                node.piece = Piece('W','KING', WKING)
+            if i == 7 and j == 4:
+                node.piece = Piece('B','KING', BKING)
+            if i == 0 and j == 3:
+                node.piece = Piece('W','QUEEN', WQUEEN)
+            if i == 7 and j == 3:
+                node.piece = Piece('B','QUEEN', BQUEEN)
+
+            # Add the node to the current row in the grid.
+            grid[i].append(node)
+    return grid
+
+def draw_grid(win, rows, width):
+    gap = width // ROWS
+    for i in range(rows):
+        pygame.draw.line(win, BLACK, (0, i * gap), (width, i * gap))
+        for j in range(rows):
+            pygame.draw.line(win, BLACK, (j * gap, 0), (j * gap, width))
+            
+def update_display(win, grid, rows, width):
+    for row in grid:
+        for spot in row:
+            spot.draw(win)
+    draw_grid(win, rows, width)
+    pygame.display.update()
+
+def pawnMoves(col, row, grid, lastMove):
+    vectors = []
+    team = grid[col][row].piece.team
+
+    # Forward movement for pawns
+    direction = -1 if team == 'B' else 1
+    start_row = 6 if team == 'B' else 1
+    enemy_start_row = 3 if team == 'B' else 4
+
+    # Standard pawn moves
+    if not grid[col + direction][row].piece:
+        vectors.append([direction, 0])
+        if col == start_row and not grid[col + 2 * direction][row].piece:
+            vectors.append([2 * direction, 0])
+
+    # Pawn captures
+    for dx in [-1, 1]:
+        if row + dx < 0 or row + dx >= ROWS:
+            continue
+        if grid[col + direction][row + dx].piece and grid[col + direction][row + dx].piece.team != team:
+            vectors.append([direction, dx])
+
+    # En passant
+    if lastMove and lastMove.piece.type == 'PAWN' and abs(lastMove.start_pos[0] - lastMove.end_pos[0]) == 2:
+        if lastMove.end_pos[0] == col and abs(lastMove.end_pos[1] - row) == 1:
+            if lastMove.end_pos[1] == row + 1 or lastMove.end_pos[1] == row - 1:
+                if lastMove.piece.team != team and lastMove.end_pos[0] == enemy_start_row:
+                    en_passant_capture = [direction, lastMove.end_pos[1] - row]
+                    vectors.append(en_passant_capture)
+    return vectors
+
+
+
+def generatePotentialMoves(nodePosition, grid, lastMove):
+    checker = lambda x, y: x + y >=0 and x + y < 8
+    positions = []
+    column, row = nodePosition
+    if grid[column][row].piece:  
+        if grid[column][row].piece.type == 'KING':
+            vectors = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]
+        elif grid[column][row].piece.type == 'ROOK':
+            vectors = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        elif grid[column][row].piece.type == 'KNIGHT':
+            vectors = [[1, 2], [1, -2], [-1, 2], [-1, -2], [2, 1], [2, -1], [-2, 1], [-2, -1]]
+        elif grid[column][row].piece.type == 'BISHOP':
+            vectors = [[1, 1], [1, -1], [-1, 1], [-1, -1]]
+        elif grid[column][row].piece.type == 'QUEEN':
+            vectors = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]
+        elif grid[column][row].piece.type == 'PAWN':
+            vectors = pawnMoves(column, row, grid, lastMove)
+            
+        for vector in vectors:
+            columnVector, rowVector = vector
+            #OUT OF BOUNDS CHECK
+            if checker(columnVector,column) and checker(rowVector,row):
+                if not grid[(column+columnVector)][(row+rowVector)].piece:
+                    positions.append((column+columnVector,row+rowVector))
+                elif grid[column+columnVector][row+rowVector].piece and\
+                    grid[column+columnVector][row+rowVector].piece.team==opposite(grid[column][row].piece.team):
+                    positions.append((columnVector+ column,rowVector+ row))
+    return positions
+
+def HighlightpotentialMoves(piecePosition, grid,lastMove):
+    #takes position of a chess piece (piecePosition) and the board grid
+    #call generatePotentialMoves to get a list of all valid move positions of the piece
+    #piecePosition is the current location of the piece, and grid is the current state of the chessboard
+    positions = generatePotentialMoves(piecePosition, grid, lastMove)
+    # Iterate through each position in the list of potential moves.
+    for position in positions:
+        # Unpack the position tuple into Column and Row variables.
+        Column,Row = position
+        # Change the color of the grid cell at each potential move position to blue.
+        grid[Column][Row].colour=BLUE
+        
+def highlight(ClickedNode, Grid, OldHighlight, lastMove):
+    # This function takes three parameters:
+    # ClickedNode: The position (column, row) of the node that was clicked or selected.
+    # Grid: A 2D array representing the chessboard, where each element is a Node object.
+    # OldHighlight: The position of the previously highlighted node, if any.
+
+    # Extract the column and row from the ClickedNode tuple.
+    Column,Row = ClickedNode
+    # Set the colour of the clicked node to orange, visually indicating selection.
+    Grid[Column][Row].colour=ORANGE
+    # If there was a previously highlighted node (OldHighlight is not None),
+    # reset the colours of the nodes that were highlighted before.
+    # This is likely done to remove the previous move highlights from the grid.
+    if OldHighlight:
+        resetColours(Grid, OldHighlight, lastMove)
+    # Highlight all potential moves for the piece at the clicked node.
+    # This function changes the colour of all nodes where the piece can legally move.
+    HighlightpotentialMoves(ClickedNode, Grid, lastMove)
+    # Return the position of the clicked node.
+    # This can be used to track the currently highlighted node.
+    return (Column,Row)
+
+def opposite(team):
+    return "W" if team=="B" else "B"
+
+def getNode(rows, width):
+    # This function is designed to translate a
+    # mouse click position into grid coordinates on a chessboard.
+    gap = width // rows
+    # Get the current mouse position.
+    RowX, RowY = pygame.mouse.get_pos()
+    # The division by 'gap' translates the pixel position to the grid position.
+    Row = RowX // gap
+    Col = RowY // gap
+    # Return a tuple (Col, Row) representing the grid coordinates of the mouse click.
+    # This corresponds to the column and row in the chessboard grid.
+    return (Col,Row)
+
+def resetColours(grid, node, lastMove):
+    positions = generatePotentialMoves(node, grid, lastMove)
+    positions.append(node)
+
+    for colouredNodes in positions:
+        nodeX, nodeY = colouredNodes
+        grid[nodeX][nodeY].colour = BLACK if abs(nodeX - nodeY) % 2 == 0 else WHITE
+
+def move(grid, piecePosition, newPosition, lastMove):
+    #resetColours(grid, piecePosition)
+    # Extract the column and row from the newPosition
+    newColumn, newRow = newPosition
+    # Extract the column and row from the piecePosition
+    oldColumn, oldRow = piecePosition
+    # Retrieve the piece object from the old position on the grid
+    piece = grid[oldColumn][oldRow].piece
+    # Check for en passant
+    if piece.type == 'PAWN' and newColumn != oldColumn and not grid[newColumn][newRow].piece:
+        # This is a diagonal move without a normal capture, potential en passant
+        if lastMove and lastMove.piece.type == 'PAWN' and abs(lastMove.start_pos[0] - lastMove.end_pos[0]) == 2:
+            if lastMove.end_pos[1] == newRow and abs(lastMove.end_pos[1] - oldRow) == 1:
+                # Remove the pawn that was "passed over" during en passant
+                passedPawnRow = lastMove.start_pos[0] if piece.team == 'W' else lastMove.end_pos[0]
+                grid[passedPawnRow][newRow].piece = None
+
+    # Move the piece object to the new position on the grid.
+    grid[newColumn][newRow].piece=piece
+    # Set the piece attribute of the old position on the grid to None, indicating it's now empty.
+    grid[oldColumn][oldRow].piece = None
+    # Return the opposite team of the piece that was moved.
+    # changes the turn to the other player in a chess game.
+    return opposite(piece.team) 
+ 
+def main(WIDTH,ROWS):
+    # Initialize the chess grid with nodes and pieces
+    grid = make_grid(ROWS, WIDTH)
+    # Track the currently highlighted piece, initially set to None
+    highlightedPiece = None
+    # Set the current move to 'B' (Black) as the starting player
+    currMove = 'B'
+    lastMove = None  # Initialize lastMove as None
+    # Start the game loop
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                print('EXIT SUCCESSFUL')
+                pygame.quit()
+                sys.exit()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                clickedNode = getNode(ROWS, WIDTH)
+                ClickedPositionColumn, ClickedPositionRow = clickedNode
+                # Check if a valid move is made (blue colored cell)
+                if grid[ClickedPositionColumn][ClickedPositionRow].colour == BLUE:
+                    if highlightedPiece:
+                        pieceColumn, pieceRow = highlightedPiece
+                    if currMove == grid[pieceColumn][pieceRow].piece.team:
+                            # Reset colors of the previous move
+                            resetColours(grid, highlightedPiece,lastMove)
+                            # Execute the move
+                            currMove=move(grid, highlightedPiece, clickedNode, lastMove)
+                            # Update lastMove object with new move details
+                            movedPiece = grid[ClickedPositionColumn][ClickedPositionRow].piece
+                            lastMove = LastMove(movedPiece, highlightedPiece, clickedNode)
+                            # Add additional details if necessary, possibly move type?
+                elif highlightedPiece == clickedNode:
+                        pass
+                else:
+                    if grid[ClickedPositionColumn][ClickedPositionRow].piece:
+                        if currMove == grid[ClickedPositionColumn][ClickedPositionRow].piece.team:
+                            highlightedPiece = highlight(clickedNode, grid, highlightedPiece, lastMove)
+                
+            update_display(WIN,grid,ROWS,WIDTH)
+main(WIDTH, ROWS)
