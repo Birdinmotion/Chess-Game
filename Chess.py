@@ -1,13 +1,11 @@
 #Class Project pygame chess
 #members: Jonathan Morley, , ,
-#Version 1.1 "en passant update"
-#11/21/23 not done at 2:17 A.M.
+#Version 1.3 "broken en passant and pawn promotion"
+#11/27/23 not done at 2:17 A.M.
 #
 
 import pygame
-#import random
 import sys
-#from itertools import combinations
 import os
 
 # current directory
@@ -104,7 +102,6 @@ def promotePawn(grid, pawnPos, team):
         new_piece = Piece(team, 'KNIGHT', WKNIGHT if team == 'W' else BKNIGHT)
     elif selectedPieceType == 'bishop':
         new_piece = Piece(team, 'BISHOP', WBISHOP if team == 'W' else BBISHOP)
-
     if new_piece:
         grid[pawnPos[0]][pawnPos[1]].piece = new_piece
         print(f"Promotion: {new_piece.type} created for team {new_piece.team}")
@@ -248,20 +245,19 @@ def pawnMoves(col, row, grid, lastMove):
         if col == start_row and not grid[col + 2 * direction][row].piece:
             vectors.append([2 * direction, 0])
 
-    # Pawn captures
+    # Pawn captures, including en passant
     for dx in [-1, 1]:
-        if row + dx < 0 or row + dx >= ROWS:
-            continue
-        if grid[col + direction][row + dx].piece and grid[col + direction][row + dx].piece.team != team:
-            vectors.append([direction, dx])
+        if 0 <= row + dx < ROWS:
+            # Regular capture
+            if grid[col + direction][row + dx].piece and grid[col + direction][row + dx].piece.team != team:
+                vectors.append([direction, dx])
+            # En passant
+            if col == enemy_start_row:  # Pawn must be on the fifth rank to perform en passant
+                if lastMove and lastMove.piece.type == 'PAWN' and abs(lastMove.start_pos[0] - lastMove.end_pos[0]) == 2:
+                    if lastMove.end_pos[1] == row + dx:  # The last move's pawn must be adjacent to the current pawn
+                        en_passant_capture = [direction, dx]
+                        vectors.append(en_passant_capture)
 
-    # En passant
-    if lastMove and lastMove.piece.type == 'PAWN' and abs(lastMove.start_pos[0] - lastMove.end_pos[0]) == 2:
-        if lastMove.end_pos[0] == col and abs(lastMove.end_pos[1] - row) == 1:
-            if lastMove.end_pos[1] == row + 1 or lastMove.end_pos[1] == row - 1:
-                if lastMove.piece.team != team and lastMove.end_pos[0] == enemy_start_row:
-                    en_passant_capture = [direction, lastMove.end_pos[1] - row]
-                    vectors.append(en_passant_capture)
     return vectors
 
 def rookMoves(col, row, grid):
@@ -361,9 +357,9 @@ def move(grid, piecePosition, newPosition, lastMove):
     piece = grid[oldColumn][oldRow].piece
 
     # variable to track when we're waiting for a promotion choice and to store the pawn's position
-    waiting_for_promotion_choice = False
-    promotion_pawn_position = None
-    promotion_team = None
+    #waiting_for_promotion_choice = False
+    #promotion_pawn_position = None
+    #promotion_team = None
 
 
     if piece is None:
@@ -390,6 +386,11 @@ def move(grid, piecePosition, newPosition, lastMove):
         print("Move failed: Move puts own king in check")
         return False  # Return a value that indicates the move was not successful
 
+    # Regular Move
+    grid[newColumn][newRow].piece = piece
+    grid[oldColumn][oldRow].piece = None
+    piece.hasMoved = True
+
     # Promotion check for pawns reaching the opposite end of the board
     if piece.type == 'PAWN':
         if (piece.team == 'W' and newColumn == 7) or (piece.team == 'B' and newColumn == 0):
@@ -406,10 +407,7 @@ def move(grid, piecePosition, newPosition, lastMove):
                 passedPawnRow = lastMove.start_pos[0] if piece.team == 'W' else lastMove.end_pos[0]
                 grid[passedPawnRow][newRow].piece = None
 
-    # Regular Move
-    grid[newColumn][newRow].piece = piece
-    grid[oldColumn][oldRow].piece = None
-    piece.hasMoved = True
+
 
     print(f"Move completed from {piecePosition} to {newPosition}")
     return True
